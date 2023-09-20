@@ -21,6 +21,12 @@ fn main() {
     }
 }
 
+/// TODO:
+/// Account for the possibility that there are more connections to COMPLETE,
+/// than connections DONE (M).
+/// The possible current oversight may cause more house connections to count as real (M),
+/// as opposed to planned (?)
+
 fn parse_and_solve_input(input: impl AsRef<str>) -> Output {
     // handle early end
     let sequence = {
@@ -37,7 +43,7 @@ fn parse_and_solve_input(input: impl AsRef<str>) -> Output {
         // build that far
         let mut builder = Vec::new();
         for (line_index, line) in lines.by_ref() {
-            if line_index * 2 > house_count || line_index > line_count {
+            if line_index * 2 >= house_count || line_index >= line_count {
                 break;
             }
             builder.push(line);
@@ -79,12 +85,16 @@ fn solve_sequence(lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
     while made_connection {
         made_connection = false;
         for (this, connections) in all_houses.clone() {
+            if connections.contains(&1) && internet_houses.insert(this) {
+                made_connection = true;
+                eprintln!("Self house [{}] connected to the internet!", this);
+            }
             if internet_houses.contains(&this) {
                 // connect all others to internet
                 for other in connections {
                     if internet_houses.insert(other) {
                         made_connection = true;
-                        eprintln!("House [{}] connected to the internet!", other);
+                        eprintln!("Other house [{}] connected to the internet!", other);
                     }
                 }
             }
