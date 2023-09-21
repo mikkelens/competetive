@@ -7,10 +7,11 @@ use std::{
 fn main() {
     // take input from kattis
     let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input).unwrap();
-    // let input = include_str!("in_1.txt");
+    let _result = std::io::stdin()
+        .read_to_string(&mut input)
+        .expect("Could not read from stdin()");
 
-    let output = parse_and_solve_input(input);
+    let output = solve_for_input(input.lines());
     match &output {
         Output::Connected => println!("{}", CONNECTED),
         Output::Missing(vec) => {
@@ -27,33 +28,6 @@ fn main() {
 /// The possible current oversight may cause more house connections to count as real (M),
 /// as opposed to planned (?)
 
-fn parse_and_solve_input(input: impl AsRef<str>) -> Output {
-    // handle early end
-    let sequence = {
-        let mut lines = input.as_ref().lines();
-
-        // figure out how far to look
-        let first_line = lines.next().unwrap().split_once(' ').unwrap();
-        let (house_count, line_count) = (
-            first_line.0.parse::<usize>().unwrap(),
-            first_line.1.parse::<usize>().unwrap(),
-        );
-        let mut lines = lines.enumerate();
-
-        // build that far
-        let mut builder = Vec::new();
-        for (line_index, line) in lines.by_ref() {
-            if line_index * 2 >= house_count || line_index >= line_count {
-                break;
-            }
-            builder.push(line);
-        }
-        assert!(lines.next().is_none());
-        builder
-    };
-    solve_sequence(sequence.iter())
-}
-
 const CONNECTED: &str = "Connected";
 
 #[derive(Debug, PartialEq)]
@@ -65,19 +39,40 @@ enum Output {
 type ID = usize;
 type Connections = BTreeSet<ID>;
 
-fn solve_sequence(lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
+fn solve_for_input(mut lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
     let mut internet_houses: Connections = Connections::from([1]);
     let mut all_houses: BTreeMap<ID, Connections> = BTreeMap::from([(1, Connections::default())]);
 
-    // make connection tree
-    for line in lines {
+    let completed_connection_count = {
+        let line = lines.next().unwrap();
+        let (_first, second) = line.as_ref().split_once(' ').unwrap();
+        second.parse::<usize>().unwrap()
+    };
+
+    // register completed connections
+    let mut connections = 0;
+    for line in lines.by_ref() {
         let (first, second) = line.as_ref().split_once(' ').expect("could not split?");
         let (first, second) = (
             first.parse().expect("Could not parse as usize?"),
             second.parse().expect("Could not parse as usize?"),
         );
-        all_houses.entry(first).or_default().insert(second);
-        all_houses.entry(second).or_default().insert(first);
+        if connections <= completed_connection_count {
+            // add houses with connections
+            for (source, target) in [(first, second), (second, first)] {
+                if all_houses.entry(source).or_default().insert(target) {
+                    connections += 1;
+                    eprintln!("Connected [{}] to [{}]", source, target);
+                }
+            }
+        } else {
+            // add houses without connections
+            for house in [first, second] {
+                if all_houses.insert(house, Connections::new()).is_none() {
+                    eprintln!("Added house [{}]", house);
+                }
+            }
+        }
     }
 
     // connect all if possible
@@ -87,14 +82,14 @@ fn solve_sequence(lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
         for (this, connections) in all_houses.clone() {
             if connections.contains(&1) && internet_houses.insert(this) {
                 made_connection = true;
-                eprintln!("Self house [{}] connected to the internet!", this);
+                eprintln!("House [{}] connected to the internet *directly*!", this);
             }
             if internet_houses.contains(&this) {
                 // connect all others to internet
                 for other in connections {
                     if internet_houses.insert(other) {
                         made_connection = true;
-                        eprintln!("Other house [{}] connected to the internet!", other);
+                        eprintln!("House [{}] connected to the internet!", other);
                     }
                 }
             }
@@ -116,7 +111,7 @@ fn solve_sequence(lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_and_solve_input, solve_sequence, Output, CONNECTED};
+    use crate::{solve_for_input, Output, CONNECTED};
     use std::str::FromStr;
     use test_case::test_case;
 
@@ -147,7 +142,7 @@ mod tests {
     #[test_case(include_str!("in_2.txt"), include_str!("out_2.txt"); "sample_2")]
     #[test_case(include_str!("in_3.txt"), include_str!("out_3.txt"); "sample_3")]
     fn solve_test(sample_input: &str, sample_output: &str) {
-        let solved_output = parse_and_solve_input(sample_input);
+        let solved_output = solve_for_input(sample_input.lines());
         let expected_output = sample_output.parse().unwrap();
         assert_eq!(
             solved_output, expected_output,
