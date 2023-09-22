@@ -2,6 +2,7 @@ use std::cmp::{max, min};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
+    iter::FromIterator, // do not remove
 };
 
 fn main() {
@@ -39,20 +40,23 @@ fn solve_for_input(input: impl AsRef<str>) -> Output {
     );
     let mut lines = input.as_ref().lines();
 
-    const CONNECTION_LIMIT: usize = 200_000;
+    const M_UPPER_BOUND: usize = 200_000;
     let (expected_house_count, completed_connection_count) = {
         let line = lines.next().unwrap();
         let (first, second) = line.split_once(' ').unwrap();
         (
-            max(first.parse::<usize>().unwrap(), 1),                 // N
-            min(second.parse::<usize>().unwrap(), CONNECTION_LIMIT), // M
+            max(first.parse::<usize>().unwrap(), 1),              // N
+            min(second.parse::<usize>().unwrap(), M_UPPER_BOUND), // M
         )
     };
 
+    const N_LOWER_BOUND: usize = 2;
+    const M_LOWER_BOUND: usize = 1;
+
     // collect house & connection data
     let mut house_map: BTreeMap<ID, BTreeSet<ID>> = BTreeMap::from([(1, BTreeSet::new())]);
-    let mut house_index = 1;
-    let mut connection_index = 0;
+    let mut house_index = N_LOWER_BOUND;
+    let mut connection_index = M_LOWER_BOUND;
     for line in lines.by_ref() {
         let ids = line
             .split(' ')
@@ -60,7 +64,7 @@ fn solve_for_input(input: impl AsRef<str>) -> Output {
 
         // count houses
         for id in ids.clone() {
-            if (0..=expected_house_count).contains(&house_index)
+            if (N_LOWER_BOUND..=expected_house_count).contains(&house_index)
                 && !house_map.contains_key(&id)
                 && house_map.insert(id, BTreeSet::new()).is_none()
             {
@@ -70,7 +74,7 @@ fn solve_for_input(input: impl AsRef<str>) -> Output {
         }
 
         // count connections
-        if (0..=completed_connection_count).contains(&connection_index) {
+        if (M_LOWER_BOUND..=completed_connection_count).contains(&connection_index) {
             assert_eq!(
                 2,
                 ids.clone().count(),
@@ -109,22 +113,26 @@ fn solve_for_input(input: impl AsRef<str>) -> Output {
     }
 
     eprintln!("house_map after parsing:{:?}\n", house_map);
-    assert_eq!(expected_house_count, house_map.len());
+    // assert_eq!(expected_house_count, house_map.len());
 
-    let mut known_connected_ids: BTreeSet<ID> = BTreeSet::from([1]);
-    let mut already_checked_ids = BTreeSet::new();
-    let mut unconnected_house_ids = house_map
-        .iter()
-        .filter(|(&id, _connections)| {
-            eprintln!();
-            !has_internet_connection(
-                &id,
-                &house_map,
-                &mut known_connected_ids,
-                &mut already_checked_ids,
+    let mut id_info_map: BTreeMap<&ID, HouseInfo> =
+        BTreeMap::from_iter(house_map.iter().map(|(id, connections)| {
+            (
+                id,
+                HouseInfo {
+                    connections,
+                    confirmed_connected: *id == 1,
+                    already_checked: *id == 1,
+                },
             )
+        }));
+    let mut unconnected_house_ids = house_map
+        .keys()
+        .filter(|id| {
+            eprintln!();
+            !has_internet_connection(id, &mut id_info_map)
         })
-        .map(|(id, _house)| *id)
+        .cloned()
         .collect::<Vec<_>>();
 
     if unconnected_house_ids.is_empty() {
@@ -135,35 +143,43 @@ fn solve_for_input(input: impl AsRef<str>) -> Output {
     }
 }
 
-fn has_internet_connection(
-    this_id: &ID,
-    connection_map: &BTreeMap<ID, BTreeSet<ID>>,
-    known_internet_ids: &mut BTreeSet<ID>,
-    already_checked_ids: &mut BTreeSet<ID>,
-) -> bool {
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+struct HouseInfo<'a> {
+    connections: &'a BTreeSet<ID>,
+    confirmed_connected: bool,
+    already_checked: bool,
+}
+
+fn has_internet_connection(this_id: &ID, id_map: &mut BTreeMap<&ID, HouseInfo>) -> bool {
+    let info = id_map
+        .get(this_id)
+        .expect("Info map should always contain this");
     eprint!("[{}]", this_id);
-    if known_internet_ids.contains(this_id) {
+    if info.confirmed_connected {
         eprint!(" ...already has internet!");
         true
     } else {
-        already_checked_ids.insert(*this_id)
+        !info.already_checked
             && ({
-                let result = connection_map.get(this_id).unwrap().iter().any(|other_id| {
-                    eprint!(" -> ");
-                    if has_internet_connection(
-                        other_id,
-                        connection_map,
-                        known_internet_ids,
-                        already_checked_ids,
-                    ) {
-                        eprint!(" ...which gives internet to [{}]", this_id);
-                        assert!(known_internet_ids.insert(*this_id));
-                        true
-                    } else {
-                        false
-                    }
-                });
-                if !connection_map.get(this_id).unwrap().is_empty() {
+                id_map.get_mut(this_id).unwrap().already_checked = true;
+                let result = id_map
+                    .get(this_id)
+                    .unwrap()
+                    .connections
+                    .iter()
+                    .any(|other_id| {
+                        eprint!(" -> ");
+                        if has_internet_connection(other_id, id_map) {
+                            eprint!(" ...which gives internet to [{}]", this_id);
+                            let info_mut = id_map.get_mut(this_id).unwrap();
+                            assert!(!info_mut.confirmed_connected);
+                            info_mut.confirmed_connected = true;
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                if !id_map.get(&this_id).unwrap().connections.is_empty() {
                     eprintln!();
                 }
                 result
