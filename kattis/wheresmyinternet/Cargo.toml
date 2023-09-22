@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 test-case = "3.2"
+seq-macro = "0.3.5"

@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+use std::cmp::{max, min};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -11,7 +11,7 @@ fn main() {
         .read_to_string(&mut input)
         .expect("Could not read from stdin()");
 
-    let output = solve_for_input(input.lines());
+    let output = solve_for_input(input);
     match &output {
         Output::Connected => println!("{}", CONNECTED),
         Output::Missing(vec) => {
@@ -22,12 +22,6 @@ fn main() {
     }
 }
 
-/// TODO:
-/// Account for the possibility that there are more connections to COMPLETE,
-/// than connections DONE (M).
-/// The possible current oversight may cause more house connections to count as real (M),
-/// as opposed to planned (?)
-
 const CONNECTED: &str = "Connected";
 
 #[derive(Debug, PartialEq)]
@@ -37,83 +31,151 @@ enum Output {
 }
 
 type ID = usize;
-type Connections = BTreeSet<ID>;
 
-fn solve_for_input(mut lines: impl Iterator<Item = impl AsRef<str>>) -> Output {
-    let mut internet_houses: Connections = Connections::from([1]);
-    let mut all_houses: BTreeMap<ID, Connections> = BTreeMap::from([(1, Connections::default())]);
+fn solve_for_input(input: impl AsRef<str>) -> Output {
+    eprintln!(
+        "Trying to solve for the following input:\n{}",
+        input.as_ref()
+    );
+    let mut lines = input.as_ref().lines();
 
-    let completed_connection_count = {
+    const CONNECTION_LIMIT: usize = 200_000;
+    let (expected_house_count, completed_connection_count) = {
         let line = lines.next().unwrap();
-        let (_first, second) = line.as_ref().split_once(' ').unwrap();
-        second.parse::<usize>().unwrap()
+        let (first, second) = line.split_once(' ').unwrap();
+        (
+            max(first.parse::<usize>().unwrap(), 1),                 // N
+            min(second.parse::<usize>().unwrap(), CONNECTION_LIMIT), // M
+        )
     };
 
-    // register completed connections
-    let mut connections = 0;
+    // collect house & connection data
+    let mut house_map: BTreeMap<ID, BTreeSet<ID>> = BTreeMap::from([(1, BTreeSet::new())]);
+    let mut house_index = 1;
+    let mut connection_index = 0;
     for line in lines.by_ref() {
-        let (first, second) = line.as_ref().split_once(' ').expect("could not split?");
-        let (first, second) = (
-            first.parse().expect("Could not parse as usize?"),
-            second.parse().expect("Could not parse as usize?"),
-        );
-        if connections <= completed_connection_count {
-            // add houses with connections
-            for (source, target) in [(first, second), (second, first)] {
-                if all_houses.entry(source).or_default().insert(target) {
-                    connections += 1;
-                    eprintln!("Connected [{}] to [{}]", source, target);
-                }
-            }
-        } else {
-            // add houses without connections
-            for house in [first, second] {
-                if all_houses.insert(house, Connections::new()).is_none() {
-                    eprintln!("Added house [{}]", house);
-                }
+        let ids = line
+            .split(' ')
+            .map(|house_str| house_str.parse::<ID>().expect("Could not parse int!"));
+
+        // count houses
+        for id in ids.clone() {
+            if (0..=expected_house_count).contains(&house_index)
+                && !house_map.contains_key(&id)
+                && house_map.insert(id, BTreeSet::new()).is_none()
+            {
+                eprintln!("Added house [{}] to set!", id);
+                house_index += 1;
             }
         }
-    }
 
-    // connect all if possible
-    let mut made_connection = true;
-    while made_connection {
-        made_connection = false;
-        for (this, connections) in all_houses.clone() {
-            if connections.contains(&1) && internet_houses.insert(this) {
-                made_connection = true;
-                eprintln!("House [{}] connected to the internet *directly*!", this);
-            }
-            if internet_houses.contains(&this) {
-                // connect all others to internet
-                for other in connections {
-                    if internet_houses.insert(other) {
-                        made_connection = true;
-                        eprintln!("House [{}] connected to the internet!", other);
+        // count connections
+        if (0..=completed_connection_count).contains(&connection_index) {
+            assert_eq!(
+                2,
+                ids.clone().count(),
+                "Connection must be formed between two houses!"
+            );
+            // create iter with pairs for elements
+            let connection_pair = ids.clone().zip(ids.clone().rev());
+            assert_eq!(
+                2,
+                connection_pair.clone().count(),
+                "Zip must have two iterations!"
+            );
+            // connect a with b
+            let connection_established = connection_pair
+                .into_iter()
+                .map(|(source, target)| {
+                    // connect if not already connected
+                    if house_map
+                        .get_mut(&source)
+                        .expect("Map should already have this ID.")
+                        .insert(target)
+                    {
+                        eprintln!("Connected {source} to {target}.");
+                        true
+                    } else {
+                        false
                     }
-                }
+                    // evaluate "any" after doing full iter
+                })
+                .reduce(|a, b| a || b)
+                .expect("Connection must be formed between two houses!");
+            if connection_established {
+                connection_index += 1;
             }
         }
     }
 
-    let mut unconnected_houses = all_houses
-        .into_keys()
-        .filter(|id| !internet_houses.contains(id))
+    eprintln!("house_map after parsing:{:?}\n", house_map);
+    assert_eq!(expected_house_count, house_map.len());
+
+    let mut known_connected_ids: BTreeSet<ID> = BTreeSet::from([1]);
+    let mut already_checked_ids = BTreeSet::new();
+    let mut unconnected_house_ids = house_map
+        .iter()
+        .filter(|(&id, _connections)| {
+            eprintln!();
+            !has_internet_connection(
+                &id,
+                &house_map,
+                &mut known_connected_ids,
+                &mut already_checked_ids,
+            )
+        })
+        .map(|(id, _house)| *id)
         .collect::<Vec<_>>();
 
-    if unconnected_houses.is_empty() {
+    if unconnected_house_ids.is_empty() {
         Output::Connected
     } else {
-        unconnected_houses.sort();
-        Output::Missing(unconnected_houses)
+        unconnected_house_ids.sort();
+        Output::Missing(unconnected_house_ids)
+    }
+}
+
+fn has_internet_connection(
+    this_id: &ID,
+    connection_map: &BTreeMap<ID, BTreeSet<ID>>,
+    known_internet_ids: &mut BTreeSet<ID>,
+    already_checked_ids: &mut BTreeSet<ID>,
+) -> bool {
+    eprint!("[{}]", this_id);
+    if known_internet_ids.contains(this_id) {
+        eprint!(" ...already has internet!");
+        true
+    } else {
+        already_checked_ids.insert(*this_id)
+            && ({
+                let result = connection_map.get(this_id).unwrap().iter().any(|other_id| {
+                    eprint!(" -> ");
+                    if has_internet_connection(
+                        other_id,
+                        connection_map,
+                        known_internet_ids,
+                        already_checked_ids,
+                    ) {
+                        eprint!(" ...which gives internet to [{}]", this_id);
+                        assert!(known_internet_ids.insert(*this_id));
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if !connection_map.get(this_id).unwrap().is_empty() {
+                    eprintln!();
+                }
+                result
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{solve_for_input, Output, CONNECTED};
+    use seq_macro::seq;
     use std::str::FromStr;
-    use test_case::test_case;
 
     impl FromStr for Output {
         type Err = String;
@@ -131,23 +193,24 @@ mod tests {
         }
     }
 
-    #[test_case(include_str!("out_1.txt"); "sample_1")]
-    #[test_case(include_str!("out_2.txt"); "sample_2")]
-    #[test_case(include_str!("out_3.txt"); "sample_3")]
-    fn parse_test(sample_output: &str) {
-        sample_output.parse::<Output>().unwrap();
-    }
+    seq!(N in 1..=3 {
+        const INPUT_STR_~N: &str = include_str!(stringify!(in_~N.txt));
+        const OUTPUT_STR_~N: &str = include_str!(stringify!(out_~N.txt));
 
-    #[test_case(include_str!("in_1.txt"), include_str!("out_1.txt"); "sample_1")]
-    #[test_case(include_str!("in_2.txt"), include_str!("out_2.txt"); "sample_2")]
-    #[test_case(include_str!("in_3.txt"), include_str!("out_3.txt"); "sample_3")]
-    fn solve_test(sample_input: &str, sample_output: &str) {
-        let solved_output = solve_for_input(sample_input.lines());
-        let expected_output = sample_output.parse().unwrap();
-        assert_eq!(
-            solved_output, expected_output,
-            "Expected {:?}!",
-            expected_output
-        );
-    }
+        #[test]
+        fn parse_test_~N() {
+            OUTPUT_STR_~N.parse::<Output>().unwrap();
+        }
+
+        #[test]
+        fn solve_test_~N() {
+            let solved_output = solve_for_input(INPUT_STR_~N);
+            let expected_output = OUTPUT_STR_~N.parse().unwrap();
+            assert_eq!(
+                solved_output, expected_output,
+                "Expected {:?}!",
+                expected_output
+            );
+        }
+    });
 }
