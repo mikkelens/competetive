@@ -1,0 +1,11 @@
+[package]
+name = "kattis_solution"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+seq-macro = "0.3" # for taking multiple input files as tests
+test-case = "3.2" # specific different tests
+
+[dependencies]
+# should probably not add more than those needed for testing
