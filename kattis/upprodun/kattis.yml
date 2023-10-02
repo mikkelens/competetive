@@ -1,0 +1,12 @@
+---
+hostname: open.kattis.com
+problem: upprodun
+files:
+  - main.rs
+language: Rust
+mainclass: ~
+build:
+  - rustc -g --crate-type bin main.rs -o a.out
+run:
+  - a.out
+samples: .
