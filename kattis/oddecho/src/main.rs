@@ -25,7 +25,8 @@ fn main() {
 
 #[derive(Debug)]
 struct Problem {
-	length_of_song: u32 // ticks
+	_n:      u8,          // amount of lines
+	n_lines: Vec<String>  // words, up to 100 letters long
 }
 
 impl FromStr for Problem {
@@ -33,22 +34,34 @@ impl FromStr for Problem {
 
 	fn from_str(input: &str) -> Result<Self, Self::Err> {
 		// parse input
+		let mut lines = input.lines();
 		Ok(Problem {
-			length_of_song: input.trim().parse::<u32>().map_err(|e| e.to_string())?
+			_n:      lines
+				.next()
+				.ok_or_else(|| "".to_string())?
+				.parse::<u8>()
+				.map_err(|e| e.to_string())
+				.unwrap(),
+			n_lines: lines.map(|line| line.to_string()).collect()
 		})
 	}
 }
 
 #[derive(Debug, PartialEq)]
 struct Solution {
-	number_of_revolutions: f32 // ticks / 4
+	odd_indexed: Vec<String>
 }
 
 impl From<Problem> for Solution {
 	fn from(problem: Problem) -> Self {
 		// solve problem
 		Solution {
-			number_of_revolutions: problem.length_of_song as f32 / 4.0
+			odd_indexed: problem
+				.n_lines
+				.into_iter()
+				.enumerate()
+				.filter_map(|(index, line)| if index % 2 == 0 { Some(line) } else { None })
+				.collect()
 		}
 	}
 }
@@ -56,7 +69,7 @@ impl From<Problem> for Solution {
 impl ToString for Solution {
 	fn to_string(&self) -> String {
 		// convert data to output format
-		format!("{:?}", self.number_of_revolutions)
+		self.odd_indexed.join("\n")
 	}
 }
 
@@ -71,14 +84,14 @@ mod tests {
 
 		fn from_str(output: &str) -> Result<Self, Self::Err> {
 			Ok(Solution {
-				number_of_revolutions: output.trim().parse::<f32>().map_err(|e| e.to_string())?
+				odd_indexed: output.lines().map(|line| line.to_string()).collect()
 			})
 		}
 	}
 
-	seq_macro::seq!(N in 0..=1 {
-		const INPUT_~N: &str = include_str!(concat!("metronome-000", N, ".in"));
-		const OUTPUT_~N: &str = include_str!(concat!("metronome-000", N, ".ans"));
+	seq_macro::seq!(N in 1..=2 {
+		const INPUT_~N: &str = include_str!(concat!(N, ".in"));
+		const OUTPUT_~N: &str = include_str!(concat!(N, ".ans"));
 
 		#[test]
 		fn problem_parsing_~N() {

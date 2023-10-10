@@ -1,0 +1,12 @@
+---
+hostname: open.kattis.com
+problem: diehard
+files:
+  - src/main.rs
+language: Rust
+mainclass: ~
+build:
+  - rustc -g --crate-type bin main.rs -o target/a.out
+run:
+  - target/a.out
+samples: src

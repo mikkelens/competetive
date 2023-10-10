@@ -25,7 +25,7 @@ fn main() {
 
 #[derive(Debug)]
 struct Problem {
-	length_of_song: u32 // ticks
+	line: String
 }
 
 impl FromStr for Problem {
@@ -34,21 +34,21 @@ impl FromStr for Problem {
 	fn from_str(input: &str) -> Result<Self, Self::Err> {
 		// parse input
 		Ok(Problem {
-			length_of_song: input.trim().parse::<u32>().map_err(|e| e.to_string())?
+			line: input.lines().next().unwrap().trim().to_string()
 		})
 	}
 }
 
 #[derive(Debug, PartialEq)]
 struct Solution {
-	number_of_revolutions: f32 // ticks / 4
+	reversed: Vec<char>
 }
 
 impl From<Problem> for Solution {
 	fn from(problem: Problem) -> Self {
 		// solve problem
 		Solution {
-			number_of_revolutions: problem.length_of_song as f32 / 4.0
+			reversed: problem.line.chars().rev().collect()
 		}
 	}
 }
@@ -56,7 +56,7 @@ impl From<Problem> for Solution {
 impl ToString for Solution {
 	fn to_string(&self) -> String {
 		// convert data to output format
-		format!("{:?}", self.number_of_revolutions)
+		format!("{}", self.reversed.iter().collect::<String>())
 	}
 }
 
@@ -71,14 +71,14 @@ mod tests {
 
 		fn from_str(output: &str) -> Result<Self, Self::Err> {
 			Ok(Solution {
-				number_of_revolutions: output.trim().parse::<f32>().map_err(|e| e.to_string())?
+				reversed: output.chars().collect()
 			})
 		}
 	}
 
-	seq_macro::seq!(N in 0..=1 {
-		const INPUT_~N: &str = include_str!(concat!("metronome-000", N, ".in"));
-		const OUTPUT_~N: &str = include_str!(concat!("metronome-000", N, ".ans"));
+	seq_macro::seq!(N in 1..=2 {
+		const INPUT_~N: &str = include_str!(concat!(N, ".in"));
+		const OUTPUT_~N: &str = include_str!(concat!(N, ".ans"));
 
 		#[test]
 		fn problem_parsing_~N() {
@@ -97,6 +97,7 @@ mod tests {
 				 .expect("Cannot parse problem!")
 				 .into();
 			let expectation: Solution = OUTPUT_~N
+			.trim()
 				 .parse()
 				 .expect("Cannot parse expected solution!");
 			assert_eq!(solution, expectation);

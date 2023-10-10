@@ -25,7 +25,11 @@ fn main() {
 
 #[derive(Debug)]
 struct Problem {
-	length_of_song: u32 // ticks
+	_n:    usize,
+	// num of items
+	m:     usize,
+	// scouts
+	items: Vec<usize>
 }
 
 impl FromStr for Problem {
@@ -33,22 +37,56 @@ impl FromStr for Problem {
 
 	fn from_str(input: &str) -> Result<Self, Self::Err> {
 		// parse input
+		eprintln!("Parsing input:\n{}", input);
+		let mut lines = input.trim().lines();
+		let (n, m) = lines.next().unwrap().split_once(' ').unwrap();
 		Ok(Problem {
-			length_of_song: input.trim().parse::<u32>().map_err(|e| e.to_string())?
+			_n:    n.parse().unwrap(),
+			m:     m.parse().unwrap(),
+			items: lines
+				.next()
+				.unwrap()
+				.trim()
+				.split(' ')
+				.map(|element| element.parse().unwrap())
+				.collect()
 		})
 	}
 }
 
 #[derive(Debug, PartialEq)]
 struct Solution {
-	number_of_revolutions: f32 // ticks / 4
+	max_weight: usize // max any scout will have to carry
 }
 
 impl From<Problem> for Solution {
 	fn from(problem: Problem) -> Self {
 		// solve problem
+		let mut sorted_items = problem.items;
+		sorted_items.sort();
+
+		let mut scouts: Vec<usize> = vec![0; problem.m];
+
+		let mut item_stack = sorted_items.into_iter().rev();
+		for scout_index in 0..problem.m {
+			match item_stack.next() {
+				None => break,
+				Some(weight) => {
+					scouts[scout_index] += weight;
+				}
+			}
+		}
+		for scout_index in (0..problem.m).rev() {
+			match item_stack.next() {
+				None => break,
+				Some(weight) => {
+					scouts[scout_index] += weight;
+				}
+			}
+		}
+
 		Solution {
-			number_of_revolutions: problem.length_of_song as f32 / 4.0
+			max_weight: scouts.into_iter().max().unwrap()
 		}
 	}
 }
@@ -56,7 +94,7 @@ impl From<Problem> for Solution {
 impl ToString for Solution {
 	fn to_string(&self) -> String {
 		// convert data to output format
-		format!("{:?}", self.number_of_revolutions)
+		format!("{}", self.max_weight)
 	}
 }
 
@@ -71,14 +109,14 @@ mod tests {
 
 		fn from_str(output: &str) -> Result<Self, Self::Err> {
 			Ok(Solution {
-				number_of_revolutions: output.trim().parse::<f32>().map_err(|e| e.to_string())?
+				max_weight: output.trim().parse().unwrap()
 			})
 		}
 	}
 
-	seq_macro::seq!(N in 0..=1 {
-		const INPUT_~N: &str = include_str!(concat!("metronome-000", N, ".in"));
-		const OUTPUT_~N: &str = include_str!(concat!("metronome-000", N, ".ans"));
+	seq_macro::seq!(N in 1..=2 {
+		const INPUT_~N: &str = include_str!(concat!(N, ".in"));
+		const OUTPUT_~N: &str = include_str!(concat!(N, ".ans"));
 
 		#[test]
 		fn problem_parsing_~N() {
@@ -87,7 +125,7 @@ mod tests {
 
 		#[test]
 		fn solution_parsing_~N() {
-			let _solution: Solution = OUTPUT_~N.parse().expect("Cannot parse problem!");
+			let _solution: Solution = OUTPUT_~N.trim().parse().expect("Cannot parse problem!");
 		}
 
 		#[test]
@@ -97,6 +135,7 @@ mod tests {
 				 .expect("Cannot parse problem!")
 				 .into();
 			let expectation: Solution = OUTPUT_~N
+			.trim()
 				 .parse()
 				 .expect("Cannot parse expected solution!");
 			assert_eq!(solution, expectation);
