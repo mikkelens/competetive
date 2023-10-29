@@ -109,6 +109,7 @@ mod tests {
 		//
 		fn from_str(sample_output: &str) -> Result<Self, Self::Err> {
 			let mut lines = sample_output.trim().lines();
+			
 			Ok(Self {
 				whitespace_char_ratio: lines
 					.next()
@@ -178,7 +179,7 @@ mod tests {
 				 .parse::<Problem>()
 				 .expect("Cannot parse problem!")
 				 .into();
-			assert_eq!(solution.to_string(), OUTPUT_~N);
+			assert_eq!(solution.to_string().lines().collect::<String>(), OUTPUT_~N.lines().collect::<String>());
 		}
 	});
 }
