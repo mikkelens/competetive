@@ -2,6 +2,7 @@
 
 use std::{
 	collections::HashMap,
+	fmt::Write,
 	io::{stdin, Read},
 	str::FromStr
 };
@@ -52,7 +53,6 @@ impl FromStr for Problem {
 		Ok(Problem {
 			_case_number,
 			cases: lines
-				.into_iter()
 				.map(|line| {
 					let Some((alien_number, rest)) = line.split_once(' ') else {
 						return None;
@@ -104,12 +104,10 @@ impl From<Problem> for Solution {
 						.map(|(index, char)| (char, index))
 						.collect();
 					let mut total = 0;
-					let mut count = 0;
-					for source_char in case.alien_number.chars().rev() {
+					for (count, source_char) in case.alien_number.chars().rev().enumerate() {
 						let value = *source_char_value_map.get(&source_char).unwrap();
 						eprintln!(" | Char '{}' = {}", source_char, value);
-						total += value * source_base.pow(count);
-						count += 1;
+						total += value * source_base.pow(count as u32);
 					}
 					eprintln!(" - Number '{}' = {}", case.alien_number, total);
 
@@ -119,7 +117,7 @@ impl From<Problem> for Solution {
 					let mut remaining_value = total;
 					loop {
 						let rest = remaining_value % target_base;
-						remaining_value = remaining_value / target_base;
+						remaining_value /= target_base;
 						let new_first_digit = case.target_language[rest];
 						eprintln!(" | Value {} is {}", rest, new_first_digit);
 						digits_rev.push(new_first_digit);
@@ -142,8 +140,10 @@ impl ToString for Solution {
 		self.outputs
 			.iter()
 			.enumerate()
-			.map(|(index, output)| format!("Case #{}: {}\n", index + 1, output))
-			.collect()
+			.fold(String::new(), |mut builder, (index, output)| {
+				let _ = writeln!(builder, "Case #{}: {}", index + 1, output);
+				builder
+			})
 	}
 }
 
